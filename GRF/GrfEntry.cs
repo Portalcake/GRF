@@ -4,44 +4,48 @@ using System.IO;
 
 namespace GRF
 {
-    public class GrfFile
+    public class GrfEntry
     {
         private byte[] _data;
+        private Grf _owner;
+        public GrfEntryHeader header { get; internal set; }
 
-        public GrfFile( byte[] data, string filePath, int compressedSize, int uncompressedSize, FileFlag flags )
+        private int hashCode { get; set; }
+
+        public GrfEntry(string path, uint fileOffset, uint compressedSize, uint compressedFileSizeAligned, uint uncompressedSize, FileFlag flags, Grf owner)
         {
-            _data = data;
-            FilePath = filePath;
-            FileName = Path.GetFileName( filePath.Replace( "\\", "/" ) );
-            FileType = Path.GetExtension( filePath ).TrimStart( '.' );
-            CompressedSize = compressedSize;
-            CompressedSizeAligned = _data.Length;
-            UncompressedSize = uncompressedSize;
-            Flags = flags;
+            Path = path;
+            hashCode = Path.GetHashCode();
+            this.header = new GrfEntryHeader();
+            this.header.fileOffset = fileOffset;
+            this.header.compressedSize = compressedSize;
+            this.header.compressedSizeAligned = compressedFileSizeAligned;
+            this.header.uncompressedSize = uncompressedSize;
+            this.header.flags = flags;
+            _owner = owner;
+            this._data = null;
         }
 
-        public string FilePath { get; }
-        public string FileName { get; }
-        public string FileType { get; }
-        public int CompressedSize { get; }
-        public int CompressedSizeAligned { get; }
-        public int UncompressedSize { get; }
-        public FileFlag Flags { get; }
+        public string Path { get; }
+        public string Name => System.IO.Path.GetFileName( Path.Replace( "\\", "/" ) );
+        public string Type => System.IO.Path.GetExtension( Path ).TrimStart( '.' );
 
         public byte[] GetUncompressedData()
         {
-            Span<byte> newData = stackalloc byte[_data.Length];
-            _data.CopyTo( newData );
+            if (this._data != null)
+                return this._data;
+        
+            Span<byte> newData = stackalloc byte[(int)this.header.compressedSizeAligned];
+            this._owner.GetCompressedBytes(this.header.fileOffset, this.header.compressedSizeAligned).CopyTo(newData);
 
-            if( Flags.HasFlag( FileFlag.Mixed ) )
-            {
-                DecodeFull( newData, CompressedSize );
+            if(this.header.flags.HasFlag(FileFlag.Mixed)) {
+                DecodeFull(newData, (int)this.header.compressedSize);
+            } else if(this.header.flags.HasFlag(FileFlag.DES)) {
+                DecodeHeader(newData);
             }
-            else if( Flags.HasFlag( FileFlag.DES ) )
-            {
-                DecodeHeader( newData );
-            }
-            return ZlibStream.UncompressBuffer( newData.ToArray() );
+
+            this._data = ZlibStream.UncompressBuffer(newData.ToArray());
+            return this.GetUncompressedData();
         }
 
         private static void DecodeHeader( Span<byte> data )
@@ -123,6 +127,11 @@ namespace GRF
             }
 
             return output;
+        }
+
+        public override int GetHashCode()
+        {
+            return this.hashCode;
         }
     }
 }
