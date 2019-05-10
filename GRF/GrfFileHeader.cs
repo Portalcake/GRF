@@ -1,16 +1,20 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace GRF
+﻿namespace GRF
 {
-    public class GrfFileHeader
+    internal class GrfHeader
     {
-        public byte[] signature { get; internal set; }
-        public byte[] encryptKey { get; internal set; }
-        public uint fileOffset { get; internal set; }
-        public uint seed { get; internal set; }
-        public uint fileCount { get; internal set; }
-        public GrfFormat version { get; internal set; }
+        internal int Size => 46;
+        internal int FileOffset { get; }
+        internal int FileTablePosition => Size + FileOffset;
+        internal int FileCount { get; }
+        internal string Signature { get; }
+        internal GrfFormat Version { get; }
+
+        internal GrfHeader( GrfFormat version, string signature, int fileCount, int fileOffset )
+        {
+            Version = version;
+            Signature = signature;
+            FileCount = fileCount;
+            FileOffset = fileOffset;
+        }
     }
 }
